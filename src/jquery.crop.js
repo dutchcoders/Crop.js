@@ -1,14 +1,132 @@
 (function($) {
     $.fn.crop = function crop(options) {
-
         var settings = $.extend({
-            gradientFrom: '#149BDF',
-            gradientTo: '#0480BE',
+            styles: {
+                gradientFrom: '#149BDF',
+                gradientTo: '#0480BE',
+                frameRgba: '0,0,0,0.75',
+                frameWidth: '10px',
+                framePosisition: 'inside',
+                newLeft: 0,
+                newTop: 0
+            },
             target: {
                 height: 120,
                 width: 120
-            }
+            },
+            original: {
+                height: 0,
+                width: 0
+            },
+            ratio: 0,
+            scale: 0,
+            minScale: 0
         }, options);
+
+        var getDimensions = function getDimensions(object) {
+            var $data = object.data('cropData');
+            var $settings = object.data('cropSettings');
+
+            var $w = $data.crp_w.val();
+            var $h = $data.crp_h.val();
+
+            //Check for any non-imaginable values
+            if ((parseInt($w) < 0 || parseInt($h) < 0) || ($w === '' || $h === '')) {
+
+                //Something is not set, better check.
+                var $temp = $("<img/>").attr("src", $data.image.attr("src")).load(function() {
+                    var $inMemory = this;
+
+                    //Update dimensions inputs
+                    $data.crp_w.val($inMemory.width);
+                    $data.crp_h.val($inMemory.height);
+
+                    //Update size inputs
+                    $data.crp_x2.val($inMemory.width);
+                    $data.crp_y2.val($inMemory.height);
+
+                    //Store variables
+                    $settings.original.height = $inMemory.height;
+                    $settings.original.width = $inMemory.width;
+
+                    //We're done with that, chuck it.
+                    $temp = null;
+
+                    //Update passed object
+                    calculateVariables($data, $settings);
+                });
+            } else {
+                //Store variables
+                $settings.original.height = $data.crp_h.val();
+                $settings.original.width = $data.crp_w.val();
+
+                //Update passed object
+                calculateVariables($data, $settings);
+            }
+        };
+
+        var calculateVariables = function calculateVariables(data, settings) {
+            var $data = data;
+            var $settings = settings;
+
+            //Calculate ratio and minimal scale
+            if ($settings.original.width > $settings.original.height) {
+                $settings.ratio = ($settings.target.width / $settings.original.width);
+                $settings.minScale = ($settings.target.height / $settings.original.height) / $settings.ratio;
+            } else {
+                $settings.ratio = ($settings.target.height / $settings.original.height);
+                $settings.minScale = ($settings.target.width / $settings.original.width) / $settings.ratio;
+            }
+
+            applyCalculations($data, $settings);
+        };
+
+        var applyCalculations = function applyCalculations(data, settings) {
+            var $data = data;
+            var $settings = settings;
+
+            //For easy access
+            var $x1 = $data.crp_x1.val();
+            var $x2 = $data.crp_x2.val();
+
+            var $y1 = $data.crp_y1.val();
+            var $y2 = $data.crp_y2.val();
+
+
+            //Calculate width for scale
+            var $width = (parseInt($x2) - parseInt($x1));
+            var $height = (parseInt($y2) - parseInt($y1));
+
+            //Get current scale
+            $settings.scale = ($settings.target.width / $width) / $settings.ratio;
+
+            //It might to small ini
+            if ($settings.scale < $settings.minScale) {
+                $settings.scale = $settings.minScale;
+            }
+
+            //Calculate newLeft and newTop and store for later reference
+            $settings.styles.newLeft = Math.ceil(0 - (parseInt($x1) * ($settings.ratio * $settings.scale)));
+            $settings.styles.newTop = Math.ceil(0 - (parseInt($y1) * ($settings.ratio * $settings.scale)));
+
+
+            $data.image.width($settings.ratio * ($settings.original.width) * $settings.scale);
+            $data.image.height($settings.ratio * ($settings.original.height) * $settings.scale);
+
+            $data.image.css(
+                    {
+                        'left': ($settings.styles.newLeft.toString() + 'px'),
+                        'top': ($settings.styles.newTop.toString() + 'px')
+                    }
+            );
+
+            var $return = {
+                cropData: $data,
+                cropSettings: $settings
+            };
+
+            return $return;
+        };
 
         return this.each(function() {
             var $object = $(this);
@@ -27,15 +145,20 @@
             data.image = $object.find('img');
 
             //Store the data object them with the data() function on the main node
-            $object.data('crop', data);
+            $object.data('cropData', data);
+
+            //Store cropsettings inside the object
+            $object.data('cropSettings', settings);
+
+            //Get dimension info from inputs, calculate all variables and apply first run positioning
+            $object.data(getDimensions($object));
+
+
+
+
         });
     };
 }(jQuery));
-
-var original = {height: 120, width: 120};
-
-var scale = 1.0;
-var ratio = 1.0;
 
 $('.crop img').one('load', function() {
     original.height = $('input[name=w]').val();
